@@ -1332,10 +1332,33 @@ class Trajectory(object):
         force_overwrite : bool, default=True
             Overwrite anything that exists at filename, if its already there
         """
+        if "forces" in self.__dict__:
+            forces = self.forces
+        else:
+            forces = None
+
+        if "velocities" in self.__dict__:
+            velocities = self.velocities
+        else:
+            velocities = None
+
+        # check if types are already numeric, otherwise, convert
+        try:
+            types = [str(int(a.name)) for a in self.top.atoms]
+        except ValueError:
+            type_dict = {}
+            for a in self.top.atoms:
+                if not a.name in type_dict: type_dict[a.name]=str(len(type_dict)+1)
+            types = [type_dict[a.name] for a in self.top.atoms]
+
+
         with LAMMPSTrajectoryFile(filename, 'w', force_overwrite=force_overwrite) as f:
             f.write(xyz=in_units_of(self.xyz, Trajectory._distance_unit, f.distance_unit),
                     cell_lengths=in_units_of(self.unitcell_lengths, Trajectory._distance_unit, f.distance_unit),
-                    cell_angles=self.unitcell_angles)
+                    cell_angles=self.unitcell_angles,
+                    types=types,
+                    forces=forces)
+#                    velocities=velocities)
 
     def save_xyz(self, filename, force_overwrite=True):
         """Save trajectory to .xyz format.
