@@ -202,7 +202,7 @@ class NetCDFTrajectoryFile(object):
         if atom_indices is not None:
             topology = topology.subset(atom_indices)
 
-        xyz, time, cell_lengths, cell_angles = self.read(n_frames=n_frames, stride=stride, atom_indices=atom_indices)
+        xyz, time, cell_lengths, cell_angles, forces = self.read(n_frames=n_frames, stride=stride, atom_indices=atom_indices)
         if len(xyz) == 0:
             return Trajectory(xyz=np.zeros((0, topology.n_atoms, 3)), topology=topology)
 
@@ -211,7 +211,8 @@ class NetCDFTrajectoryFile(object):
 
         return Trajectory(xyz=xyz, topology=topology, time=time,
                           unitcell_lengths=cell_lengths,
-                          unitcell_angles=cell_angles)
+                          unitcell_angles=cell_angles,
+                          forces=forces)
 
     def read(self, n_frames=None, stride=None, atom_indices=None):
         """Read data from a molecular dynamics trajectory in the AMBER NetCDF
@@ -241,6 +242,8 @@ class NetCDFTrajectoryFile(object):
         cell_angles : np.ndarray, None
             The angles (\alpha, \beta, \gamma) defining the unit cell for
             each frame, or None if  the information is not present in the file.
+        forces : np.ndarray, shape=(n_frames, n_atoms, 3)
+            The force vector of each atom, in units of kcal/mol/angstroms.
         """
         self._validate_open()
         if self._mode != 'r':
@@ -277,6 +280,13 @@ class NetCDFTrajectoryFile(object):
                              'variables in the file were %s' % 
                              self._handle.variables.keys())
 
+        if 'forces' in self._handle.variables:
+            forces = self._handle.variables['forces'][frame_slice, atom_slice, :]
+        else:
+            raise ValueError('No forces found in the NetCDF file. The only '
+                             'variables in the file were %s' % 
+                             self._handle.variables.keys())
+
         if 'time' in self._handle.variables:
             time = self._handle.variables['time'][frame_slice]
         else:
@@ -307,6 +317,8 @@ class NetCDFTrajectoryFile(object):
         # https://github.com/rmcgibbo/mdtraj/issues/440
         if coordinates is not None and not coordinates.flags['WRITEABLE']:
             coordinates = np.array(coordinates, copy=True)
+        if forces is not None and not forces.flags['WRITEABLE']:
+            forces = np.array(forces, copy=True)
         if time is not None and not time.flags['WRITEABLE']:
             time = np.array(time, copy=True)
         if cell_lengths is not None and not cell_lengths.flags['WRITEABLE']:
@@ -314,7 +326,7 @@ class NetCDFTrajectoryFile(object):
         if cell_angles is not None and not cell_angles.flags['WRITEABLE']:
             cell_angles = np.array(cell_angles, copy=True)
 
-        return coordinates, time, cell_lengths, cell_angles
+        return coordinates, time, cell_lengths, cell_angles, forces
 
     def write(self, coordinates, time=None, cell_lengths=None, cell_angles=None):
         """Write one or more frames of a molecular dynamics trajectory to disk
